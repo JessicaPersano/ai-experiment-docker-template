@@ -21,6 +21,25 @@ Bare-bones template for running an agent inside a Docker container with the situ
 - *Within-session* situational awareness — if your prompts or experimental framing have a "designed feel" inside the conversation, the agent can still notice. That's a prompt-design issue, not an infrastructure issue. Docker controls what surrounds the conversation, not what's inside it.
 - Model priors about deployment environments — frontier models have intuitions about what real production looks like
 
+## Prerequisites — install Docker
+
+Everything below assumes Docker Desktop is installed and its daemon is running. If you already have it, skip to Quick start.
+
+**macOS (Homebrew):**
+```bash
+brew install --cask docker
+```
+
+**Windows:** download the installer from https://www.docker.com/products/docker-desktop/ and run it. Select the **WSL 2 backend** when prompted. You may also need to enable hardware virtualization in your BIOS.
+
+Then open Docker Desktop and wait for the whale icon (menu bar on macOS, system tray on Windows) to show the daemon is up. Confirm with:
+
+```bash
+docker run --rm hello-world
+```
+
+If that prints a greeting, you are ready. If it complains it cannot connect to the daemon, Docker Desktop is not running yet.
+
 ## Quick start
 
 ```bash
@@ -61,6 +80,24 @@ Output should land in something like `runs/run_20260512_143022/transcript.txt`.
    Older versions of this template referenced a `--no-memory` flag as a third blank-slate layer. **That flag no longer exists in Claude Code.** The two layers above (fresh `.claude` mount + `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`) are what actually enforce the blank slate. The closest current equivalent is `--bare`, which skips auto-memory and `CLAUDE.md` auto-discovery — but `--bare` reads auth strictly from `ANTHROPIC_API_KEY` or an `apiKeyHelper` and never from OAuth or the keychain, so it will break a subscription-based login. Don't reach for it unless you are already using an API key.
 
 5. **Withholding the tool is not the same as blocking the network.** The container in this template has full outbound access, and if the agent has `Bash` it can still reach the internet by other means (`curl`, `install.packages()` hitting CRAN). If you need the run to be genuinely offline, add `--network none` to the `docker run` in `run_session.sh`. Note that this also blocks the orchestrator's own API calls, so it only applies to harnesses where the model is reached some other way — otherwise use a firewall/proxy allowlist that permits only the API endpoint.
+
+## Troubleshooting
+
+**"Cannot connect to the Docker daemon"** — Docker Desktop is not running. Open the app and wait for the whale icon.
+
+**"docker: command not found"** — Docker Desktop is installed but not on your PATH. On macOS, reopen the terminal after installing. On Windows, use a terminal opened after installation.
+
+**Image not found** — build it first: `docker build -t agent-harness-demo .` from the repo root. Rebuild whenever the `Dockerfile` changes.
+
+**Scripts fail with carriage-return errors (Windows)** — the shell scripts were checked out with CRLF line endings. Fix with:
+```bash
+git config core.autocrlf input
+git checkout -- .
+```
+
+**Environment variable not visible inside the container** — variables must be exported in the shell *before* `docker run`, and passed through with `-e`. On Windows, user environment variables set through System Settings are only picked up by terminals opened afterwards.
+
+**Permission errors writing to the run directory** — the container runs as the non-root `runner` user. Make sure the host directory you mount at `/workspace/run` is writable, or `chown` it to match.
 
 ## Important: the orchestrator is the harder half
 
