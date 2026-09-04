@@ -6,7 +6,7 @@ Bare-bones template for running an agent inside a Docker container with the situ
 
 - **Per-session container isolation.** Each `docker run` gets a fresh filesystem and process namespace.
 - **Three-mount pattern.** Data read-only, run workspace writable, fresh `~/.claude/` per session.
-- **Three-layer blank-slate enforcement.** Empty `/home/runner/.claude/` mount + `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` env var + (optional) `--no-memory` CLI flag on the Claude Code invocation.
+- **Two-layer blank-slate enforcement.** Empty `/home/runner/.claude/` mount + `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` env var.
 - **Minimal demonstrator orchestrator.** Verifies the container is wired up correctly. You replace this with your actual experimental code.
 
 ## What Docker does (and doesn't) help with
@@ -15,7 +15,7 @@ Bare-bones template for running an agent inside a Docker container with the situ
 - Session isolation between runs — no state leakage between sessions
 - Repeated runs without detection — each session boots looking like the first and only run
 - Controlled tool access — define exactly what the agent can do
-- Blank-slate enforcement via the three layers above
+- Blank-slate enforcement via the two layers above
 
 **Doesn't help with:**
 - *Within-session* situational awareness — if your prompts or experimental framing have a "designed feel" inside the conversation, the agent can still notice. That's a prompt-design issue, not an infrastructure issue. Docker controls what surrounds the conversation, not what's inside it.
@@ -56,7 +56,11 @@ Output should land in something like `runs/run_20260512_143022/transcript.txt`.
 1. **Swap the base image** if you need R (`rocker/tidyverse`), Node + Claude Code CLI (see the sycophancy paper's Dockerfile), or other runtimes.
 2. **Replace `orchestrator/run_session.py`** with your actual session-orchestration code. The demonstrator is intentionally trivial — it just proves the container is wired up correctly. Your orchestrator implements the conversation flow for your experiment.
 3. **Adjust `run_session.sh`** paths to point at your data and run directories.
-4. **If using Claude Code CLI** inside the container, pass `--no-memory` on the claude invocation as the third layer of blank-slate enforcement (the env var is the second; the fresh `.claude` mount is the first).
+4. **If using Claude Code CLI** inside the container, restrict tools explicitly on the `claude` invocation. The sycophancy harness uses `--tools Read,Write,Edit,Glob,Grep,Bash,Task` — note that `WebSearch` and `WebFetch` are simply left out, which is how web access is withheld from the agent.
+
+   Older versions of this template referenced a `--no-memory` flag as a third blank-slate layer. **That flag no longer exists in Claude Code.** The two layers above (fresh `.claude` mount + `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`) are what actually enforce the blank slate. The closest current equivalent is `--bare`, which skips auto-memory and `CLAUDE.md` auto-discovery — but `--bare` reads auth strictly from `ANTHROPIC_API_KEY` or an `apiKeyHelper` and never from OAuth or the keychain, so it will break a subscription-based login. Don't reach for it unless you are already using an API key.
+
+5. **Withholding the tool is not the same as blocking the network.** The container in this template has full outbound access, and if the agent has `Bash` it can still reach the internet by other means (`curl`, `install.packages()` hitting CRAN). If you need the run to be genuinely offline, add `--network none` to the `docker run` in `run_session.sh`. Note that this also blocks the orchestrator's own API calls, so it only applies to harnesses where the model is reached some other way — otherwise use a firewall/proxy allowlist that permits only the API endpoint.
 
 ## Important: the orchestrator is the harder half
 
